@@ -1,0 +1,2 @@
+# MyPrompt
+My PowerShell prompt
