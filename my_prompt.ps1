@@ -14,6 +14,22 @@ function Test-IsAdmin {
 function Test-Command { param([Parameter(Mandatory)][string]$Name)
     try { $null -ne (Get-Command $Name -ErrorAction SilentlyContinue) } catch { $false } }
 
+# Detect whether to use ASCII only
+$script:UseAscii = $false
+try {
+    $script:UseAscii = ($env:PROMPT_ASCII -in @('1','true'))
+    if (-not $script:UseAscii) {
+        # Prefer UTF-8 if available
+        if ([Console]::OutputEncoding.WebName -ne 'utf-8') {
+            [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+        }
+        # If font is missing (common cause of tofu), allow manual opt-in via PROMPT_ASCII
+    }
+} catch { $script:UseAscii = $true }
+
+$script:Ellipsis = if ($script:UseAscii) { '...' } else { '…' }
+$script:BranchPrefix = if ($script:UseAscii) { 'branch:' } else { ' ' }
+
 # =================== Azure (info-only) ===================
 function Format-AzCloudTag {
     param([string]$EnvName)
@@ -47,16 +63,21 @@ function Get-GitSegment {
 
         git diff --quiet --ignore-submodules -- 2>$null;  $unstaged = ($LASTEXITCODE -ne 0)
         git diff --cached --quiet --ignore-submodules -- 2>$null; $staged   = ($LASTEXITCODE -ne 0)
-        
         $mark = if ($unstaged -or $staged) { '*' } else { '' }
 
-        $prefix = if ($env:PROMPT_ASCII -in @('1','true')) { 'branch:' } else { ' ' }
-        
-        [Uri]$uri = git config --get remote.origin.url 2>$null
-        if (-not $uri) { return "$prefix$branch$mark" }
-        $org  = $uri.Segments[-2].TrimEnd('/')
-        $repo = $uri.Segments[-1].Replace('.git','')
+        $prefix = $script:BranchPrefix
 
+        # Handle https and ssh remotes
+        $raw = git config --get remote.origin.url 2>$null
+        if (-not $raw) { return "$prefix$branch$mark" }
+
+        $org=''; $repo=''
+        if ($raw -match '^(?<proto>https|http)://[^/]+/(?<org>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
+            $org  = $Matches['org']; $repo = $Matches['repo']
+        } elseif ($raw -match '^(?:git@|ssh://git@)[^/:]+[:/](?<org>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
+            $org  = $Matches['org']; $repo = $Matches['repo']
+        }
+        if (-not $org -or -not $repo) { return "$prefix$branch$mark" }
         "$org/$repo - $prefix$branch$mark"
     } catch { $null }
 }
@@ -74,7 +95,7 @@ function prompt {
     $azText = $null
     if ($az.subId) {
         $id = $az.subId
-        $idTag = if ($id.Length -ge 8) { $id.Substring(0,4) + '…' + $id.Substring($id.Length-4) } else { $id }
+        $idTag = if ($id.Length -ge 8) { $id.Substring(0,4) + ($script:Ellipsis) + $id.Substring($id.Length-4) } else { $id }
         $label = if ($cloudLabel) { $cloudLabel } else { 'Azure ?' }
         $azText = "$label $($az.subName) ($idTag)"
     } elseif ($az.env) {
@@ -84,7 +105,6 @@ function prompt {
         $azText = "Azure ? cli unavailable"
     }
 
-    
     # Git (branch + dirty mark)
     $gitSeg = Get-GitSegment
 
