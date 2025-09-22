@@ -14,10 +14,9 @@ function Test-IsAdmin {
 function Test-Command { param([Parameter(Mandatory)][string]$Name)
     try { $null -ne (Get-Command $Name -ErrorAction SilentlyContinue) } catch { $false } }
 
-# Always use ASCII-friendly prompt symbols
-$script:UseAscii = $true
+# Always use plain ASCII for prompt symbols
 $script:Ellipsis = '...'
-$script:BranchPrefix = 'branch:'
+$script:BranchPrefix = ''
 
 # =================== Azure (info-only) ===================
 function Format-AzCloudTag {
@@ -54,11 +53,9 @@ function Get-GitSegment {
         git diff --cached --quiet --ignore-submodules -- 2>$null; $staged   = ($LASTEXITCODE -ne 0)
         $mark = if ($unstaged -or $staged) { '*' } else { '' }
 
-        $prefix = $script:BranchPrefix
-
         # Handle https and ssh remotes
         $raw = git config --get remote.origin.url 2>$null
-        if (-not $raw) { return "$prefix$branch$mark" }
+        if (-not $raw) { return "$branch$mark" }
 
         $org=''; $repo=''
         if ($raw -match '^(?<proto>https|http)://[^/]+/(?<org>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
@@ -66,8 +63,8 @@ function Get-GitSegment {
         } elseif ($raw -match '^(?:git@|ssh://git@)[^/:]+[:/](?<org>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
             $org  = $Matches['org']; $repo = $Matches['repo']
         }
-        if (-not $org -or -not $repo) { return "$prefix$branch$mark" }
-        "$org/$repo - $prefix$branch$mark"
+        if (-not $org -or -not $repo) { return "$branch$mark" }
+        "$org/$repo - $branch$mark"
     } catch { $null }
 }
 
