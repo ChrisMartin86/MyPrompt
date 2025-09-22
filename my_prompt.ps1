@@ -14,21 +14,10 @@ function Test-IsAdmin {
 function Test-Command { param([Parameter(Mandatory)][string]$Name)
     try { $null -ne (Get-Command $Name -ErrorAction SilentlyContinue) } catch { $false } }
 
-# Detect whether to use ASCII only
-$script:UseAscii = $false
-try {
-    $script:UseAscii = ($env:PROMPT_ASCII -in @('1','true'))
-    if (-not $script:UseAscii) {
-        # Prefer UTF-8 if available
-        if ([Console]::OutputEncoding.WebName -ne 'utf-8') {
-            [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-        }
-        # If font is missing (common cause of tofu), allow manual opt-in via PROMPT_ASCII
-    }
-} catch { $script:UseAscii = $true }
-
-$script:Ellipsis = if ($script:UseAscii) { '...' } else { '…' }
-$script:BranchPrefix = if ($script:UseAscii) { 'branch:' } else { ' ' }
+# Always use ASCII-friendly prompt symbols
+$script:UseAscii = $true
+$script:Ellipsis = '...'
+$script:BranchPrefix = 'branch:'
 
 # =================== Azure (info-only) ===================
 function Format-AzCloudTag {
