@@ -54,7 +54,7 @@ function Get-GitSegment {
 
         # Handle https and ssh remotes
         $raw = git config --get remote.origin.url 2>$null
-        if (-not $raw) { return "$branch$mark" }
+        if (-not $raw) { return "⎇ $branch$mark" }
 
         $org=''; $repo=''
         if ($raw -match '^(?<proto>https|http)://[^/]+/(?<org>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
