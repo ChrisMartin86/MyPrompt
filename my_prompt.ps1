@@ -14,8 +14,9 @@ function Test-IsAdmin {
 function Test-Command { param([Parameter(Mandatory)][string]$Name)
     try { $null -ne (Get-Command $Name -ErrorAction SilentlyContinue) } catch { $false } }
 
-# Always use plain ASCII for prompt symbols
+# Prompt symbols
 $script:Ellipsis = '...'
+$script:GitSymbol = '⎇'
 
 # =================== Azure (info-only) ===================
 function Format-AzCloudTag {
@@ -54,7 +55,7 @@ function Get-GitSegment {
 
         # Handle https and ssh remotes
         $raw = git config --get remote.origin.url 2>$null
-        if (-not $raw) { return "⎇ $branch$mark" }
+    if (-not $raw) { return "$script:GitSymbol $branch$mark" }
 
         $org=''; $repo=''
         if ($raw -match '^(?<proto>https|http)://[^/]+/(?<org>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
@@ -62,8 +63,8 @@ function Get-GitSegment {
         } elseif ($raw -match '^(?:git@|ssh://git@)[^/:]+[:/](?<org>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
             $org  = $Matches['org']; $repo = $Matches['repo']
         }
-        if (-not $org -or -not $repo) { return "⎇ $branch$mark" }
-        "$org/$repo - ⎇ $branch$mark"
+    if (-not $org -or -not $repo) { return "$script:GitSymbol $branch$mark" }
+    "$org/$repo - $script:GitSymbol $branch$mark"
     } catch { $null }
 }
 
