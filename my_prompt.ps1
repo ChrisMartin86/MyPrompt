@@ -16,7 +16,7 @@ function Test-Command { param([Parameter(Mandatory)][string]$Name)
 
 # Always use plain ASCII for prompt symbols
 $script:Ellipsis = '...'
-$script:BranchPrefix = ''
+$script:BranchPrefix = '⎇'
 
 # =================== Azure (info-only) ===================
 function Format-AzCloudTag {
