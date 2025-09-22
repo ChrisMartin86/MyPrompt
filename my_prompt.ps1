@@ -16,7 +16,6 @@ function Test-Command { param([Parameter(Mandatory)][string]$Name)
 
 # Always use plain ASCII for prompt symbols
 $script:Ellipsis = '...'
-$script:BranchPrefix = '⎇'
 
 # =================== Azure (info-only) ===================
 function Format-AzCloudTag {
@@ -63,8 +62,8 @@ function Get-GitSegment {
         } elseif ($raw -match '^(?:git@|ssh://git@)[^/:]+[:/](?<org>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
             $org  = $Matches['org']; $repo = $Matches['repo']
         }
-        if (-not $org -or -not $repo) { return "$script:BranchPrefix $branch$mark" }
-        "$org/$repo - $script:BranchPrefix $branch$mark"
+        if (-not $org -or -not $repo) { return "⎇ $branch$mark" }
+        "$org/$repo - ⎇ $branch$mark"
     } catch { $null }
 }
 
