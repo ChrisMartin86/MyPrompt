@@ -63,8 +63,8 @@ function Get-GitSegment {
         } elseif ($raw -match '^(?:git@|ssh://git@)[^/:]+[:/](?<org>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
             $org  = $Matches['org']; $repo = $Matches['repo']
         }
-        if (-not $org -or -not $repo) { return "$branch$mark" }
-        "$org/$repo - $branch$mark"
+        if (-not $org -or -not $repo) { return "$script:BranchPrefix $branch$mark" }
+        "$org/$repo - $script:BranchPrefix $branch$mark"
     } catch { $null }
 }
 
