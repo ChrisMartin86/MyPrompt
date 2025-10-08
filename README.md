@@ -1,6 +1,3 @@
-
-
-
 # MyPrompt ⎇
 
 Hey, I'm Chris. This is my PowerShell prompt.
@@ -12,8 +9,8 @@ Hey, I'm Chris. This is my PowerShell prompt.
 ## ✨ Features
 - Shows Azure subscription and environment
 - Shows AWS account number (if connected)
-- Git branch and repo info with a cool symbol
-- Shortens long paths for readability
+- Git branch and repo info
+- Shortens prompt path for readability
 - Admin indicator
 
 ---
