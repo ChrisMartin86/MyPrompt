@@ -142,7 +142,7 @@ function prompt {
     Write-Host $infoLine
     if ($gitSeg) {
         $name = (gh auth status -a | Select-String keyring).ToString().Split(" ")[-2]
-        Write-Host "$name - Current Repo:  $($script:ColorYellow)$gitSeg$($script:ColorReset)"
+        Write-Host "$($script:ColorYellow)$name - Current Repo:  $gitSeg$($script:ColorReset)"
     }
 
     "PS $path> "
