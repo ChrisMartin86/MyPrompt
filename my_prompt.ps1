@@ -1,36 +1,55 @@
-# =================== AWS (account number) ===================
-function Get-AwsAccountNumber {
-    if (-not (Test-Command aws)) { return $null }
-    try {
-        $id = aws sts get-caller-identity --output json 2>$null | ConvertFrom-Json
-        if ($id -and $id.Account) { return $id.Account }
-    }
-    catch { return $null }
-    return $null
+# =================== Utility: Command Existence ===================
+function Test-Command {
+    param([Parameter(Mandatory)][string]$Name)
+    Get-Command $Name -ErrorAction Ignore | ForEach-Object { return $true }
+    return $false
 }
-# =================== Helpers ===================
+
+# =================== Utility: Short Path ===================
 function Set-ShorterPath {
     param([Parameter(Mandatory)][string]$Path, [int]$Max = 48)
     if ($Path.Length -le $Max) { return $Path }
     $sep = [IO.Path]::DirectorySeparatorChar
-    $parts = $Path -split '[\\/]+'; if ($parts.Count -le 3) { return $Path }
-    "$($parts[0])$sep...$sep$($parts[-2])$sep$($parts[-1])"
+    $parts = $Path.Split($sep, [System.StringSplitOptions]::RemoveEmptyEntries)
+    if ($parts.Count -le 3) { return $Path }
+    return "$($parts[0])$sep...$sep$($parts[-2])$sep$($parts[-1])"
 }
+
+# =================== Utility: Admin Check ===================
 function Test-IsAdmin {
     $id = [Security.Principal.WindowsIdentity]::GetCurrent()
     $pri = [Security.Principal.WindowsPrincipal]$id
     $pri.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
-function Test-Command {
-    param([Parameter(Mandatory)][string]$Name)
-    try { $null -ne (Get-Command $Name -ErrorAction SilentlyContinue) } catch { $false } 
+
+# =================== Simple Cache Framework (for cloud only) ===================
+$script:Cache = @{}
+function Get-Cached {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][ScriptBlock]$Block,
+        [int]$TTLSeconds = 20
+    )
+    $now = Get-Date
+    if ($script:Cache[$Name] -and ($now -lt $script:Cache[$Name].Expiry)) {
+        return $script:Cache[$Name].Value
+    }
+    $val = & $Block
+    $script:Cache[$Name] = @{ Value = $val; Expiry = $now.AddSeconds($TTLSeconds) }
+    return $val
 }
 
-# Prompt symbols
-$script:Ellipsis = '...'
-$script:GitSymbol = '⎇'
+# =================== AWS Account ===================
+function Get-AwsAccountNumber {
+    if (-not (Test-Command aws)) { return $null }
+    try {
+        $id = aws sts get-caller-identity --output json 2>$null | ConvertFrom-Json
+        return $id.Account
+    }
+    catch { return $null }
+}
 
-# =================== Azure (info-only) ===================
+# =================== Azure Context ===================
 function Format-AzCloudTag {
     param([string]$EnvName)
     switch ($EnvName) {
@@ -41,47 +60,52 @@ function Format-AzCloudTag {
 }
 function Get-AzCliContext {
     if (-not (Test-Command az)) { return [ordered]@{ env = $null; subId = $null; subName = $null } }
-    $envName = $null
-    try { $envName = (az cloud show --query name -o tsv 2>$null) } catch {}
-    $subId = $null; $subName = $null
     try {
+        $envName = az cloud show --query name -o tsv 2>$null
         $acc = az account show -o json 2>$null | ConvertFrom-Json
-        if ($acc) { $subId = $acc.id; $subName = $acc.name }
+        [ordered]@{
+            env     = $envName
+            subId   = $acc.id
+            subName = $acc.name
+        }
     }
-    catch {}
-    [ordered]@{ env = $envName; subId = $subId; subName = $subName }
+    catch {
+        [ordered]@{ env = $null; subId = $null; subName = $null }
+    }
 }
 
-# =================== Git (branch + dirty indicator only) ===================
+# =================== Git Segment (single call, no cache) ===================
+$script:GitSymbol = '⎇'
 function Get-GitSegment {
     if (-not (Test-Command git)) { return $null }
     try {
-        git rev-parse --is-inside-work-tree 1>$null 2>$null
+        $output = git status --porcelain=2 --branch 2>$null        
         if ($LASTEXITCODE -ne 0) { return $null }
 
-        $branch = git symbolic-ref --short -q HEAD 2>$null
+        $branch = ($output | Where-Object { $_ -match '^# branch.head ' } | ForEach-Object { $_.Split(' ')[2] })
         if (-not $branch) { $branch = git rev-parse --short HEAD 2>$null }
-
-        git diff --quiet --ignore-submodules -- 2>$null; $unstaged = ($LASTEXITCODE -ne 0)
-        git diff --cached --quiet --ignore-submodules -- 2>$null; $staged = ($LASTEXITCODE -ne 0)
-        $mark = if ($unstaged -or $staged) { '*' } else { '' }
-
-        # Handle https and ssh remotes
-        $raw = git config --get remote.origin.url 2>$null
-        if (-not $raw) { return "$script:GitSymbol $branch$mark" }
-
-        $org = ''; $repo = ''
-        if ($raw -match '^(?<proto>https|http)://[^/]+/(?<org>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
-            $org = $Matches['org']; $repo = $Matches['repo']
+        $dirty = if ($output | Where-Object { $_ -notmatch '^#' }) { '*' } else { '' }
+        $remote = git config --get remote.origin.url 2>$null
+        if ($remote -match '[:/](?<org>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
+            return "$($Matches['org'])/$($Matches['repo']) - $script:GitSymbol $branch$dirty"
         }
-        elseif ($raw -match '^(?:git@|ssh://git@)[^/:]+[:/](?<org>[^/]+)/(?<repo>[^/]+?)(?:\.git)?$') {
-            $org = $Matches['org']; $repo = $Matches['repo']
-        }
-        if (-not $org -or -not $repo) { return "$script:GitSymbol $branch$mark" }
-        "$org/$repo - $script:GitSymbol $branch$mark"
+        "$script:GitSymbol $branch$dirty"
     }
     catch { $null }
 }
+
+# =================== Script-Scoped Globals ===================
+$script:Ellipsis = '...'
+
+# ANSI color escapes (PowerShell 7+)
+$esc = [char]27
+$script:ColorGray = "${esc}[90m"
+$script:ColorGreen = "${esc}[32m"
+$script:ColorCyan = "${esc}[36m"
+$script:ColorMagenta = "${esc}[35m"
+$script:ColorYellow = "${esc}[33m"
+$script:ColorRed = "${esc}[31m"
+$script:ColorReset = "${esc}[0m"
 
 # =================== Prompt ===================
 function prompt {
@@ -90,38 +114,36 @@ function prompt {
     $admin = Test-IsAdmin
     $path = Set-ShorterPath -Path (Get-Location).Path
 
-    # Azure
-    $az = Get-AzCliContext
+    # Use cache for expensive cloud lookups
+    $az = Get-Cached -Name 'AzContext' -Block { Get-AzCliContext } -TTLSeconds 30
+    $awsAccount = Get-Cached -Name 'AwsAccount' -Block { Get-AwsAccountNumber } -TTLSeconds 30
+    $gitSeg = Get-GitSegment
+
+    # Azure label
     $cloudLabel = Format-AzCloudTag -EnvName $az.env
-    $azText = $null
     if ($az.subId) {
-        $id = $az.subId
-        $idTag = if ($id.Length -ge 8) { $id.Substring(0, 4) + ($script:Ellipsis) + $id.Substring($id.Length - 4) } else { $id }
-        $label = if ($cloudLabel) { $cloudLabel } else { 'Azure ?' }
-        $azText = "$label $($az.subName) ($idTag)"
+        $idTag = if ($az.subId.Length -ge 8) { $az.subId.Substring(0, 4) + $script:Ellipsis + $az.subId.Substring($az.subId.Length - 4) } else { $az.subId }
+        $azText = "$cloudLabel $($az.subName) ($idTag)"
     }
     elseif ($az.env) {
-        $label = if ($cloudLabel) { $cloudLabel } else { 'Azure ?' }
-        $azText = "$label not logged in"
+        $azText = "$cloudLabel not logged in"
     }
     else {
         $azText = "Azure ? cli unavailable"
     }
 
-    # AWS
-    $awsAccount = Get-AwsAccountNumber
+    # Compose and print the info line
+    $infoLine = "$($script:ColorGray)[$now]$($script:ColorReset) "
+    if ($admin) { $infoLine += "$($script:ColorRed)[ADMIN]$($script:ColorReset) " }
+    $infoLine += "$($script:ColorGreen)$user$($script:ColorReset)"
+    if ($azText) { $infoLine += "  $($script:ColorCyan)$azText$($script:ColorReset)" }
+    if ($awsAccount) { $infoLine += "  $($script:ColorMagenta)AWS: $awsAccount$($script:ColorReset)" }
 
-    # Git (branch + dirty mark)
-    $gitSeg = Get-GitSegment
+    Write-Host $infoLine
+    if ($gitSeg) {
+        $name = (gh auth status -a | Select-String keyring).ToString().Split(" ")[-2]
+        Write-Host "$name - Current Repo:  $($script:ColorYellow)$gitSeg$($script:ColorReset)"
+    }
 
-    # ---- Info line ----
-    Write-Host "[$now] " -NoNewline -ForegroundColor DarkGray
-    if ($admin) { Write-Host "[ADMIN] " -NoNewline -ForegroundColor Red }
-    Write-Host $user -NoNewline -ForegroundColor Green
-    if ($azText) { Write-Host "  $azText" -NoNewline -ForegroundColor Cyan }
-    if ($awsAccount) { Write-Host "  AWS: $awsAccount" -NoNewline -ForegroundColor Magenta }
-    if ($gitSeg) { Write-Host ""; Write-Host "Current Repo:  $gitSeg" -NoNewline -ForegroundColor Yellow }
-
-    Write-Host ""  # newline
     "PS $path> "
 }
