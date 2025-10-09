@@ -106,6 +106,9 @@ $script:ColorMagenta = "${esc}[35m"
 $script:ColorYellow = "${esc}[33m"
 $script:ColorRed = "${esc}[31m"
 $script:ColorReset = "${esc}[0m"
+$script:ColorBlue = "${esc}[34m"
+$script:ColorWhite = "${esc}[97m"
+
 
 # =================== Prompt ===================
 function prompt {
@@ -141,8 +144,9 @@ function prompt {
 
     Write-Host $infoLine
     if ($gitSeg) {
-        $name = (gh auth status -a | Select-String keyring).ToString().Split(" ")[-2]
-        Write-Host "$($script:ColorYellow)$name - Current Repo:  $gitSeg$($script:ColorReset)"
+        $authAccount = (gh auth status -a | Select-String keyring).ToString().Split(" ")[-2]
+        $committingAs = git config user.email
+        Write-Host "$($script:ColorBlue)github:[$authAccount] $($script:ColorWhite)git:[$committingAs] $($script:ColorYellow)$gitSeg$($script:ColorReset)"
     }
 
     "PS $path> "
